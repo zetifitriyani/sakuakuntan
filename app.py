@@ -2,85 +2,123 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.set_page_config(page_title="💼 SakuAkuntan AI", layout="wide")
+st.set_page_config(page_title="💼 SakuAkuntan", layout="wide")
 
-st.title("💼 SakuAkuntan Dashboard")
-st.caption("Dashboard Akuntansi + Analisis Keuangan Otomatis")
+st.title("💼 SakuAkuntan")
+st.caption("Aplikasi Akuntansi Sederhana + Dashboard & Insight")
+
+# =============================
+# INPUT MANUAL
+# =============================
+st.subheader("✍️ Input Transaksi Manual")
+
+with st.form("form_input"):
+    tgl = st.date_input("Tanggal")
+    ket = st.text_input("Keterangan")
+    jenis = st.selectbox("Jenis", ["Masuk", "Keluar"])
+    kategori = st.text_input("Kategori")
+    jumlah = st.number_input("Jumlah", min_value=0)
+    submit = st.form_submit_button("Tambah Transaksi")
+
+if "data" not in st.session_state:
+    st.session_state.data = pd.DataFrame(
+        columns=["Tanggal", "Keterangan", "Jenis", "Kategori", "Jumlah"]
+    )
+
+if submit:
+    new_row = {
+        "Tanggal": tgl,
+        "Keterangan": ket,
+        "Jenis": jenis,
+        "Kategori": kategori,
+        "Jumlah": jumlah
+    }
+    st.session_state.data = pd.concat(
+        [st.session_state.data, pd.DataFrame([new_row])],
+        ignore_index=True
+    )
+    st.success("Transaksi berhasil ditambahkan")
+
+st.divider()
+
+# =============================
+# UPLOAD EXCEL
+# =============================
+st.subheader("📂 Upload File Excel (Opsional)")
 
 uploaded_file = st.file_uploader(
-    "📂 Upload file Excel Kas",
+    "Upload Excel Kas",
     type=["xlsx", "xls", "csv"]
 )
 
+df_excel = pd.DataFrame()
+
 if uploaded_file:
-    try:
-        if uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-        else:
-            df = pd.read_excel(uploaded_file)
+    if uploaded_file.name.endswith(".csv"):
+        df_excel = pd.read_csv(uploaded_file)
+    else:
+        df_excel = pd.read_excel(uploaded_file)
 
-        required_cols = ["Tanggal", "Keterangan", "Jenis", "Kategori", "Jumlah"]
-        if not all(col in df.columns for col in required_cols):
-            st.error("Kolom wajib: Tanggal, Keterangan, Jenis, Kategori, Jumlah")
-            st.stop()
+# =============================
+# GABUNG DATA
+# =============================
+df = pd.concat([st.session_state.data, df_excel], ignore_index=True)
 
-        df["Tanggal"] = pd.to_datetime(df["Tanggal"])
-        df["Jumlah"] = df["Jumlah"].astype(float)
+if df.empty:
+    st.info("Silakan input manual atau upload Excel")
+    st.stop()
 
-        # =====================
-        # FILTER BULAN
-        # =====================
-        df["Bulan"] = df["Tanggal"].dt.strftime("%Y-%m")
-        bulan = st.selectbox("📅 Pilih Bulan", df["Bulan"].unique())
-        df = df[df["Bulan"] == bulan]
+# =============================
+# PROCESS
+# =============================
+df["Tanggal"] = pd.to_datetime(df["Tanggal"])
+df["Jumlah"] = df["Jumlah"].astype(float)
+df["Bulan"] = df["Tanggal"].dt.strftime("%Y-%m")
 
-        # =====================
-        # RINGKASAN
-        # =====================
-        masuk = df[df["Jenis"] == "Masuk"]["Jumlah"].sum()
-        keluar = df[df["Jenis"] == "Keluar"]["Jumlah"].sum()
-        saldo = masuk - keluar
+bulan = st.selectbox("📅 Pilih Bulan", df["Bulan"].unique())
+df = df[df["Bulan"] == bulan]
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("💰 Kas Masuk", f"Rp {masuk:,.0f}")
-        col2.metric("💸 Kas Keluar", f"Rp {keluar:,.0f}")
-        col3.metric("🧮 Saldo", f"Rp {saldo:,.0f}")
+# =============================
+# DASHBOARD
+# =============================
+masuk = df[df["Jenis"] == "Masuk"]["Jumlah"].sum()
+keluar = df[df["Jenis"] == "Keluar"]["Jumlah"].sum()
+saldo = masuk - keluar
 
-        # =====================
-        # AI INSIGHT
-        # =====================
-        st.subheader("🤖 AI Insight Keuangan")
+st.subheader("📊 Ringkasan Keuangan")
+c1, c2, c3 = st.columns(3)
+c1.metric("💰 Kas Masuk", f"Rp {masuk:,.0f}")
+c2.metric("💸 Kas Keluar", f"Rp {keluar:,.0f}")
+c3.metric("🧮 Saldo", f"Rp {saldo:,.0f}")
 
-        if keluar > masuk:
-            st.error("⚠️ Pengeluaran lebih besar dari pemasukan. Perlu pengendalian biaya.")
-        elif keluar > 0.7 * masuk:
-            st.warning("⚠️ Pengeluaran cukup tinggi. Disarankan evaluasi pos pengeluaran.")
-        else:
-            st.success("✅ Keuangan sehat. Pengeluaran masih dalam batas aman.")
+# =============================
+# AI INSIGHT
+# =============================
+st.subheader("🤖 Insight Otomatis")
 
-        # =====================
-        # GRAFIK TREN
-        # =====================
-        st.subheader("📈 Tren Kas")
-        trend = df.groupby(["Tanggal", "Jenis"])["Jumlah"].sum().reset_index()
-        fig_trend = px.line(trend, x="Tanggal", y="Jumlah", color="Jenis", markers=True)
-        st.plotly_chart(fig_trend, use_container_width=True)
-
-        # =====================
-        # PIE KATEGORI
-        # =====================
-        st.subheader("🧁 Pengeluaran per Kategori")
-        kategori_df = df[df["Jenis"] == "Keluar"].groupby("Kategori")["Jumlah"].sum().reset_index()
-        fig_pie = px.pie(kategori_df, names="Kategori", values="Jumlah", hole=0.4)
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-        # =====================
-        # DATA
-        # =====================
-        st.subheader("📄 Detail Transaksi")
-        st.dataframe(df, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"Terjadi error: {e}")
+if keluar > masuk:
+    st.error("⚠️ Keuangan defisit. Pengeluaran lebih besar dari pemasukan.")
+elif keluar > 0.7 * masuk:
+    st.warning("⚠️ Pengeluaran tinggi. Perlu pengendalian biaya.")
 else:
-    st.info("⬆️ Upload file Excel untuk melihat dashboard")
+    st.success("✅ Keuangan sehat dan terkendali.")
+
+# =============================
+# CHARTS
+# =============================
+st.subheader("📈 Tren Kas")
+trend = df.groupby(["Tanggal", "Jenis"])["Jumlah"].sum().reset_index()
+fig_trend = px.line(trend, x="Tanggal", y="Jumlah", color="Jenis", markers=True)
+st.plotly_chart(fig_trend, use_container_width=True)
+
+st.subheader("🧁 Pengeluaran per Kategori")
+kat = df[df["Jenis"] == "Keluar"].groupby("Kategori")["Jumlah"].sum().reset_index()
+if not kat.empty:
+    fig_pie = px.pie(kat, names="Kategori", values="Jumlah", hole=0.4)
+    st.plotly_chart(fig_pie, use_container_width=True)
+
+# =============================
+# DATA TABLE
+# =============================
+st.subheader("📄 Detail Transaksi")
+st.dataframe(df, use_container_width=True)
