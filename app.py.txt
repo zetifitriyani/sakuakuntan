@@ -1,0 +1,66 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+# ======================
+# PAGE SETUP
+# ======================
+st.set_page_config(
+    page_title="💼 SakuAkuntan",
+    layout="wide"
+)
+
+st.title("💼 SakuAkuntan")
+st.caption("Aplikasi Akuntansi Sederhana | Kas Masuk & Kas Keluar")
+
+# ======================
+# UPLOAD DATA
+# ======================
+uploaded_file = st.file_uploader(
+    "📂 Upload File Excel Kas",
+    type=["xlsx", "xls", "csv"]
+)
+
+if uploaded_file:
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
+    else:
+        df = pd.read_excel(uploaded_file)
+
+    st.subheader("📄 Preview Data")
+    st.dataframe(df)
+
+    required_cols = ["Tanggal", "Keterangan", "Jenis", "Jumlah"]
+    if not all(col in df.columns for col in required_cols):
+        st.error("❌ Kolom harus: Tanggal, Keterangan, Jenis, Jumlah")
+    else:
+        df["Jumlah"] = df["Jumlah"].astype(float)
+
+        kas_masuk = df[df["Jenis"] == "Masuk"]["Jumlah"].sum()
+        kas_keluar = df[df["Jenis"] == "Keluar"]["Jumlah"].sum()
+        saldo = kas_masuk - kas_keluar
+
+        st.subheader("📊 Ringkasan Keuangan")
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric("💰 Kas Masuk", f"Rp {kas_masuk:,.0f}")
+        col2.metric("💸 Kas Keluar", f"Rp {kas_keluar:,.0f}")
+        col3.metric("🧮 Saldo Akhir", f"Rp {saldo:,.0f}")
+
+        summary_df = pd.DataFrame({
+            "Kategori": ["Kas Masuk", "Kas Keluar"],
+            "Jumlah": [kas_masuk, kas_keluar]
+        })
+
+        fig = px.bar(
+            summary_df,
+            x="Kategori",
+            y="Jumlah",
+            title="Grafik Kas Masuk vs Kas Keluar",
+            text_auto=True
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+else:
+    st.info("⬆️ Upload file Excel untuk memulai")
