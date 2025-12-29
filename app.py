@@ -19,44 +19,25 @@ if uploaded_file is not None:
         else:
             df = pd.read_excel(uploaded_file)
 
-        st.subheader("📄 Data Kas")
-        st.dataframe(df, use_container_width=True)
+        # Validasi kolom
+        required_cols = ["Tanggal", "Keterangan", "Jenis", "Jumlah"]
+        if not all(col in df.columns for col in required_cols):
+            st.error("Kolom Excel harus: Tanggal, Keterangan, Jenis, Jumlah")
+            st.stop()
 
-        if all(col in df.columns for col in ["Tanggal", "Keterangan", "Jenis", "Jumlah"]):
+        df["Tanggal"] = pd.to_datetime(df["Tanggal"])
+        df["Jumlah"] = df["Jumlah"].astype(float)
 
-            df["Jumlah"] = df["Jumlah"].astype(float)
+        # =========================
+        # FILTER BULAN
+        # =========================
+        df["Bulan"] = df["Tanggal"].dt.strftime("%Y-%m")
+        bulan_list = df["Bulan"].unique()
+        selected_bulan = st.selectbox("📅 Pilih Bulan", bulan_list)
 
-            kas_masuk = df[df["Jenis"] == "Masuk"]["Jumlah"].sum()
-            kas_keluar = df[df["Jenis"] == "Keluar"]["Jumlah"].sum()
-            saldo = kas_masuk - kas_keluar
+        df_filtered = df[df["Bulan"] == selected_bulan]
 
-            st.subheader("📊 Ringkasan Dashboard")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("💰 Kas Masuk", f"Rp {kas_masuk:,.0f}")
-            col2.metric("💸 Kas Keluar", f"Rp {kas_keluar:,.0f}")
-            col3.metric("🧮 Saldo Akhir", f"Rp {saldo:,.0f}")
-
-            # Dashboard Chart
-            chart_df = pd.DataFrame({
-                "Kategori": ["Kas Masuk", "Kas Keluar"],
-                "Jumlah": [kas_masuk, kas_keluar]
-            })
-
-            fig = px.bar(
-                chart_df,
-                x="Kategori",
-                y="Jumlah",
-                text_auto=True,
-                title="Grafik Kas Masuk vs Kas Keluar"
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-        else:
-            st.warning("Kolom Excel harus: Tanggal, Keterangan, Jenis, Jumlah")
-
-    except Exception as e:
-        st.error(f"Terjadi error: {e}")
-
-else:
-    st.info("⬆️ Upload file Excel untuk melihat dashboard")
+        # =========================
+        # METRICS
+        # =========================
+        kas_masuk = df_filtered[df_filtered_]()
